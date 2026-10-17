@@ -14,6 +14,7 @@ GAMES = [
     ("games.snake",     "Snake",         "Eat the apples without biting yourself."),
     ("games.pong",      "Pong",          "W / S to move. First to 7 points wins."),
     ("games.sudoku",    "Sudoku",        "Fill every row, column and box with 1-9."),
+    ("games.mastermind","Mastermind",    "Crack the hidden colour code in as few guesses as you can."),
     ("games.checkers",  "Checkers",      "Diagonal captures, kings, and forced multi-jumps."),
     ("games.chess",     "Chess",         "Full rules, castling, en passant, promotion, and AI."),
 ]
