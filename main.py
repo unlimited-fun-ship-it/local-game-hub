@@ -491,6 +491,10 @@ class SettingsDialog(tk.Toplevel):
         self.geometry("560x620")
         self.minsize(42, 40)
 
+        # True while we batch a large change (e.g. Reset) so we don't
+        # hammer the disk with one write per tkinter variable.
+        self._suppress_save = False
+
         self._family_var = tk.StringVar(value=theme.font_family)
         self._size_vars = {k: tk.IntVar(value=v) for k, v in theme.font_sizes.items()}
         self._color_vars = {k: tk.StringVar(value=v) for k, v in theme.colors.items()}
@@ -589,12 +593,20 @@ class SettingsDialog(tk.Toplevel):
             self._color_vars[key].set(picker.result)
 
     def _reset(self):
-        defaults = Theme()
-        self._family_var.set(defaults.font_family)
-        for k, v in defaults.font_sizes.items():
-            self._size_vars[k].set(v)
-        for k, v in defaults.colors.items():
-            self._color_vars[k].set(v)
+        # Setting the tkinter vars fires the traces, which in turn call
+        # theme.save() many times during the loop. Suppress the intermediate
+        # saves, then write once at the end.
+        self._suppress_save = True
+        try:
+            defaults = Theme()
+            self._family_var.set(defaults.font_family)
+            for k, v in defaults.font_sizes.items():
+                self._size_vars[k].set(v)
+            for k, v in defaults.colors.items():
+                self._color_vars[k].set(v)
+        finally:
+            self._suppress_save = False
+        theme.save()
 
     def _on_font(self):
         try:
@@ -603,6 +615,8 @@ class SettingsDialog(tk.Toplevel):
                 theme.font_sizes[k] = int(v.get())
         except (tk.TclError, ValueError):
             return
+        if not self._suppress_save:
+            theme.save()
         self._broadcast()
 
     def _on_color(self, key):
@@ -617,6 +631,8 @@ class SettingsDialog(tk.Toplevel):
         for k, sw in self._color_swatches:
             if k == key:
                 sw.configure(bg=val)
+        if not self._suppress_save:
+            theme.save()
         self._broadcast()
 
     def _broadcast(self):

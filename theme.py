@@ -8,6 +8,15 @@ Every game reads from the shared `theme` object, so a change here
 (or via the Settings dialog) is picked up everywhere.
 """
 
+import json
+import os
+
+# Settings file lives next to this module, so it resolves reliably
+# regardless of the directory the hub is launched from.
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "settings.json")
+
+
 
 class Theme:
     def __init__(self):
@@ -61,6 +70,62 @@ class Theme:
     def color(self, role):
         return self.colors.get(role, "#ff00ff")
 
+    # ----------------------------------------------------- persistence
+    def to_dict(self):
+        """Serialisable snapshot of the current theme."""
+        return {
+            "font_family": self.font_family,
+            "font_sizes": dict(self.font_sizes),
+            "colors": dict(self.colors),
+        }
+
+    def from_dict(self, data):
+        """Apply a snapshot. Unknown keys are ignored, wrong types are
+        skipped — so a settings file written by an older (or newer) build
+        degrades gracefully instead of crashing."""
+        if isinstance(data.get("font_family"), str):
+            self.font_family = data["font_family"]
+
+        sizes = data.get("font_sizes")
+        if isinstance(sizes, dict):
+            for k, v in sizes.items():
+                if k in self.font_sizes and isinstance(v, int) and v > 0:
+                    self.font_sizes[k] = v
+
+        colors = data.get("colors")
+        if isinstance(colors, dict):
+            for k, v in colors.items():
+                if k in self.colors and isinstance(v, str):
+                    self.colors[k] = v
+
+    def save(self, path=None):
+        """Write current settings. Returns True on success."""
+        path = path or CONFIG_PATH
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.to_dict(), f, indent=2)
+            return True
+        except OSError:
+            # Read-only filesystem, permissions issue, etc.
+            # Silently fall back — the app keeps working with in-memory theme.
+            return False
+
+    def load(self, path=None):
+        """Read saved settings if present. Returns True if a file was found
+        and parsed. Never raises — a corrupt/missing file means defaults."""
+        path = path or CONFIG_PATH
+        if not os.path.exists(path):
+            return False
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                self.from_dict(json.load(f))
+            return True
+        except (OSError, json.JSONDecodeError):
+            return False
 
 # The single shared instance everyone imports.
 theme = Theme()
+
+# Apply the user's saved settings on startup. If there is no settings file
+# yet (first run) or it can't be read, `theme` keeps its hardcoded defaults.
+theme.load()
