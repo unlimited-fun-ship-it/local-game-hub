@@ -1,20 +1,18 @@
-"""Tic-Tac-Toe - resizable, themeable."""
-
 import tkinter as tk
-
+import save_manager
 from theme import theme
+
+GAME_ID = "tictactoe"
 
 LINES = [(0, 1, 2), (3, 4, 5), (6, 7, 8),
          (0, 3, 6), (1, 4, 7), (2, 5, 8),
          (0, 4, 8), (2, 4, 6)]
-
 
 def winner_of(board):
     for a, b, c in LINES:
         if board[a] and board[a] == board[b] == board[c]:
             return board[a]
     return None
-
 
 class TicTacToe(tk.Toplevel):
     def __init__(self, master=None):
@@ -29,7 +27,6 @@ class TicTacToe(tk.Toplevel):
         self.apply_theme()
         self.focus_set()
 
-    # ------------------------------------------------------------------ build
     def _build(self):
         self.status = tk.Label(self, text="")
         self.status.pack(pady=(14, 8))
@@ -61,7 +58,16 @@ class TicTacToe(tk.Toplevel):
                                  padx=10, pady=4)
         self.new_btn.pack(side="right")
 
-    # ------------------------------------------------------------------ theme
+        self.load_btn = tk.Button(self.bottom, text="Load",
+                                  command=self.load_game, relief="flat", bd=0,
+                                  padx=10, pady=4)
+        self.load_btn.pack(side="right", padx=(0, 4))
+
+        self.save_btn = tk.Button(self.bottom, text="Save",
+                                  command=self.save_game, relief="flat", bd=0,
+                                  padx=10, pady=4)
+        self.save_btn.pack(side="right", padx=(0, 4))
+
     def apply_theme(self):
         bg = theme.color("bg")
         fg = theme.color("fg")
@@ -87,11 +93,11 @@ class TicTacToe(tk.Toplevel):
         self.vs_cb.configure(bg=bg, fg=fg, selectcolor=btn_bg,
                              activebackground=bg, activeforeground=fg,
                              font=theme.font("body"))
-        self.new_btn.configure(bg=btn_bg, fg=btn_fg,
-                               activebackground=hover, activeforeground=btn_fg,
-                               font=theme.font("button"))
+        for btn in (self.new_btn, self.save_btn, self.load_btn):
+            btn.configure(bg=btn_bg, fg=btn_fg,
+                          activebackground=hover, activeforeground=btn_fg,
+                          font=theme.font("button"))
 
-    # -------------------------------------------------------------- game flow
     def new_game(self):
         self.board = [""] * 9
         self.turn = "X"
@@ -99,6 +105,35 @@ class TicTacToe(tk.Toplevel):
         for b in self.cells:
             b.config(text=" ", fg=theme.color("fg"))
         self.update_status()
+
+    def get_state(self):
+        return {
+            "board": self.board,
+            "turn": self.turn,
+            "over": self.over,
+            "vs_computer": self.vs_computer.get()
+        }
+
+    def set_state(self, data):
+        self.board = data["board"]
+        self.turn = data["turn"]
+        self.over = data["over"]
+        self.vs_computer.set(data["vs_computer"])
+        for i, cell in enumerate(self.cells):
+            cell.config(text=self.board[i] or " ",
+                        fg=theme.color("accent_x") if self.board[i] == "X" else
+                           theme.color("accent_o") if self.board[i] == "O" else
+                           theme.color("fg"))
+        self.update_status()
+
+    def save_game(self):
+        save_manager.prompt_save(self, GAME_ID, self.get_state())
+
+    def load_game(self):
+        fname = save_manager.prompt_load(self, GAME_ID)
+        if fname:
+            data = save_manager.load_game(GAME_ID, fname)
+            self.set_state(data)
 
     def update_status(self):
         if self.over:
@@ -145,7 +180,6 @@ class TicTacToe(tk.Toplevel):
             return True
         return False
 
-    # ------------------------------------------------------------------- AI
     def computer_move(self):
         if self.over:
             return
@@ -171,12 +205,9 @@ class TicTacToe(tk.Toplevel):
 
     def _minimax(self, board, player):
         w = winner_of(board)
-        if w == "O":
-            return 1
-        if w == "X":
-            return -1
-        if "" not in board:
-            return 0
+        if w == "O": return 1
+        if w == "X": return -1
+        if "" not in board: return 0
 
         if player == "O":
             best = -2
@@ -194,7 +225,6 @@ class TicTacToe(tk.Toplevel):
                 best = min(best, self._minimax(board, "O"))
                 board[i] = ""
         return best
-
 
 def run(master=None):
     return TicTacToe(master)

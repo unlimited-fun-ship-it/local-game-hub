@@ -25,7 +25,10 @@ from collections import namedtuple
 
 import tkinter as tk
 
+import save_manager
 from theme import theme
+
+GAME_ID = "chess"
 
 # How many plies the engine looks ahead. 2 = snappy, 3 = stronger (~0.3-1s).
 AI_DEPTH = 3
@@ -644,6 +647,16 @@ class Chess(tk.Toplevel):
                                      relief="flat", bd=0, padx=10, pady=3)
         self.history_btn.pack(side="right", padx=(0, 4))
 
+        self.load_btn = tk.Button(self.bottom, text="Load",
+                                  command=self.load_game, relief="flat", bd=0,
+                                  padx=10, pady=3)
+        self.load_btn.pack(side="right", padx=(0, 4))
+
+        self.save_btn = tk.Button(self.bottom, text="Save",
+                                  command=self.save_game, relief="flat", bd=0,
+                                  padx=10, pady=3)
+        self.save_btn.pack(side="right", padx=(0, 4))
+
         self.hint_lbl = tk.Label(
             self,
             text="Click a piece, then a highlighted square  •  R to restart")
@@ -685,7 +698,8 @@ class Chess(tk.Toplevel):
         self.vs_cb.configure(bg=bg, fg=fg, selectcolor=btn_bg,
                              activebackground=bg, activeforeground=fg,
                              font=theme.font("body"))
-        for btn in (self.new_btn, self.history_btn):
+        for btn in (self.new_btn, self.history_btn,
+                    self.save_btn, self.load_btn):
             btn.configure(bg=btn_bg, fg=btn_fg,
                           activebackground=hover, activeforeground=btn_fg,
                           font=theme.font("button"))
@@ -723,6 +737,64 @@ class Chess(tk.Toplevel):
         else:
             self.update_status()
 
+    # ----------------------------------------------------------- save/load
+    def get_state(self):
+        return {
+            "board": self.state.board,
+            "turn": self.state.turn,
+            "castling": self.state.castling,
+            "ep_square": self.state.ep_square,
+            "halfmove": self.state.halfmove,
+            "fullmove": self.state.fullmove,
+            "white_taken": self.white_taken,
+            "black_taken": self.black_taken,
+            "last_move": list(self.last_move) if self.last_move else None,
+            "game_over": self.game_over,
+            "game_over_text": self.game_over_text,
+            "vs_computer": self.vs_computer.get(),
+            "move_history": self.move_history,
+        }
+
+    def set_state(self, data):
+        self.state = ChessState(
+            board=data["board"],
+            turn=data["turn"],
+            castling=data["castling"],
+            ep_square=tuple(data["ep_square"]) if data["ep_square"] else None,
+            halfmove=data["halfmove"],
+            fullmove=data["fullmove"],
+        )
+        self.white_taken = data["white_taken"]
+        self.black_taken = data["black_taken"]
+        self.last_move = Move(*data["last_move"]) if data["last_move"] else None
+        self.game_over = data["game_over"]
+        self.game_over_text = data["game_over_text"]
+        self.vs_computer.set(data["vs_computer"])
+        self.move_history = [tuple(m) for m in data["move_history"]]
+
+        self.selected = None
+        self.legal_targets = {}
+        self.ai_thinking = False
+
+        self.check_game_over()
+        self.update_status()
+        self.draw()
+        self._update_captures_display()
+        # Defer engine search so loading doesn't block the UI.
+        self.after(10, self.refresh_engine)
+        if self._history_window and self._history_window.winfo_exists():
+            self._history_window.refresh()
+
+    def save_game(self):
+        save_manager.prompt_save(self, GAME_ID, self.get_state())
+
+    def load_game(self):
+        fname = save_manager.prompt_load(self, GAME_ID)
+        if fname:
+            data = save_manager.load_game(GAME_ID, fname)
+            self.set_state(data)
+
+    # ----------------------------------------------------------- input
     def on_key(self, event):
         if event.keysym.lower() == "r":
             self.new_game()
